@@ -250,10 +250,19 @@ docs/      Screenshot and demo script
 
 ## How AI was used
 
-> _Draft: edit to reflect your own process before submitting._
-> I used Claude Code to scaffold the gateway, worker, frontend, and tests from my design, and to
-> check the USGS, Open-Meteo, Runpod, and Chronos-2 APIs against their live behavior. I reviewed
-> and ran every part, and can walk through or change any of it.
+Most of the building was done by AI, and I directed it.
+
+- **Claude Code** (Anthropic's coding agent) proposed the design from my brief and wrote the
+  gateway, worker, frontend, tests, this README and the slides. It checked each API's real
+  behavior against live responses rather than relying on docs alone, and it ran the Runpod
+  deployment through `runpodctl` and the REST API.
+- **My part was direction:** building on my
+  [When Rivers Speak](https://github.com/rodrigosf672/when-rivers-speak) project, making
+  Runpod the compute engine rather than just a host, choosing how to publish it, and deciding
+  what to ship, fix and cut after reviewing it against the brief's criteria.
+- **Evidence was the referee.** The tests, the live failure drills, and a direct experiment
+  overturned one of the AI's own claims: it had said the rain input widens the forecast band,
+  and it doesn't (see the note at the top).
 
 ## Data and licenses
 
