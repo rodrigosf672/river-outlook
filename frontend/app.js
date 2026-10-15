@@ -36,6 +36,8 @@ const el = (tag, attrs = {}, ...kids) => {
   return n;
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// "NVIDIA RTX PRO 6000 Blackwell Server Edition MIG 1g.24gb" -> "RTX PRO 6000 Blackwell MIG 1g.24gb"
+const gpuName = (d) => (d || "GPU").replace(/^NVIDIA\s+/, "").replace(/\s*Server Edition/, "");
 const fmt = (v) => v === 0 ? "0" : v >= 1000 ? Math.round(v).toLocaleString() : v.toFixed(v < 10 ? 2 : 0);
 
 class ApiError extends Error {
@@ -202,7 +204,7 @@ function renderResult(job) {
   const badge = $("model-badge");
   badge.className = "badge" + (job.mode === "gpu" ? " gpu" : "");
   badge.textContent = job.mode === "gpu"
-    ? `Chronos-2 · ${m.device || "GPU"} · ${m.covariates ? "rain-aware" : "flow only"}`
+    ? `Chronos-2 · ${gpuName(m.device)} · ${m.covariates ? "rain-aware" : "flow only"}`
     : `${m.name} · fallback`;
 
   const last = job.history[job.history.length - 1];
@@ -403,7 +405,7 @@ async function burst() {
       });
       const end = job.forecast[job.forecast.length - 1];
       c.root.classList.add(job.mode);
-      c.s.textContent = `${job.mode === "gpu" ? job.model.device : "baseline"} · day 7: ${fmt(end.p50)} cfs`;
+      c.s.textContent = `${job.mode === "gpu" ? gpuName(job.model.device) : "baseline"} · day 7: ${fmt(end.p50)} cfs`;
     } catch (err) {
       c.root.classList.add("failed");
       c.s.textContent = err.message;
