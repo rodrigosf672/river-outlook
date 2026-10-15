@@ -226,7 +226,7 @@ gateway/   FastAPI gateway: app/{main,service,usgs,openmeteo,runpod_client,basel
 worker/    Runpod Serverless handler (Chronos-2), local Runpod stand-in, tests
 frontend/  Static HTML/CSS/JS, no build step; served by the gateway
 deploy/    deploy.sh plus the endpoint and pod configs used for the live deployment
-docs/      Screenshot and demo script
+docs/      Screenshot, demo script, and live request/response examples (examples.md)
 ```
 
 ## Known limitations and next steps
