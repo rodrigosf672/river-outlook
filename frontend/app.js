@@ -3,7 +3,8 @@
 
 const API = (window.RIVER_API_BASE || "").replace(/\/$/, "");
 const POLL_MS = 1500;
-const CLIENT_TIMEOUT_MS = 180_000;
+// Longer than any server-side GPU_DEADLINE_S, so the server always answers first.
+const CLIENT_TIMEOUT_MS = 360_000;
 
 const GAUGES = [
   ["01646500", "Potomac River near Washington, DC"],

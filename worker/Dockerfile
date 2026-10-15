@@ -5,15 +5,19 @@
 FROM runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404
 
 WORKDIR /app
-# Ubuntu 24.04 marks system Python as externally managed (PEP 668); this is a
-# single-purpose container, so installing into it is fine.
-ENV PYTHONUNBUFFERED=1 HF_HOME=/models PIP_BREAK_SYSTEM_PACKAGES=1
+ENV PYTHONUNBUFFERED=1 HF_HOME=/models
+
+# A venv that still sees the base image's torch/CUDA. Ubuntu 24.04 blocks pip on
+# system Python (PEP 668) and owns packages pip cannot upgrade (cryptography);
+# in the venv, newer versions shadow them instead of replacing them.
+RUN python3 -m venv --system-site-packages /opt/venv
+ENV PATH=/opt/venv/bin:$PATH
 
 COPY requirements.txt .
-RUN python3 -m pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt && python -c "import torch, chronos; print('torch', torch.__version__)"
 
 # Bake the weights into the image so a cold worker does not download them.
-RUN python3 -c "from chronos import Chronos2Pipeline; Chronos2Pipeline.from_pretrained('amazon/chronos-2', device_map='cpu')"
+RUN python -c "from chronos import Chronos2Pipeline; Chronos2Pipeline.from_pretrained('amazon/chronos-2', device_map='cpu')"
 
 COPY forecast.py handler.py ./
-CMD ["python3", "-u", "handler.py"]
+CMD ["python", "-u", "handler.py"]
