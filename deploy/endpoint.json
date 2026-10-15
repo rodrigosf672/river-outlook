@@ -1,0 +1,25 @@
+{
+  "name": "river-outlook-forecast",
+  "type": "QUEUE",
+  "image": "ghcr.io/rodrigosf672/river-outlook-worker:9c984cfd04089168588486fe7db633e6b4f3b36b",
+  "disk": 20,
+  "gpu": {
+    "pools": [
+      "ADA_24",
+      "AMPERE_24",
+      "AMPERE_16"
+    ],
+    "minCudaVersion": "12.8"
+  },
+  "workers": {
+    "min": 0,
+    "max": 3,
+    "idleTimeout": 60
+  },
+  "scaling": {
+    "type": "QUEUE_DELAY",
+    "queueDelay": 4
+  },
+  "flashboot": "FLASHBOOT",
+  "timeout": 120000
+}

@@ -55,7 +55,7 @@ forecasts arrive at once (try the *burst* button). The browser never sees a key.
 1. The browser `POST`s `{site_id, horizon_days}`. The gateway validates it (8 to 15 digit
    site id, horizon 1 to 14).
 2. The gateway fetches gauge metadata and discharge from USGS **in parallel**, cleans the
-   series (interpolates gaps of 3 days or fewer, cuts at longer outages), then
+   series (interpolates gaps of up to 7 days and says so, cuts at longer outages), then
    fetches rainfall from Open-Meteo using the gauge's coordinates.
 3. It aligns both series by date and submits a job to the Runpod endpoint with `/run`.
    The response is `202` with a job id and `runpod_status: IN_QUEUE`.

@@ -82,7 +82,7 @@ def test_baseline_band_is_ordered():
     from app.series import regularize
     rows = [(f["properties"]["time"], float(f["properties"]["value"]))
             for f in daily_json(value=lambda i: 1000 + (300 if i % 7 == 0 else 0))["features"]]
-    for day in baseline.forecast(regularize(rows), 7):
+    for day in baseline.forecast(regularize(rows)[0], 7):
         assert 0 <= day["p10"] <= day["p50"] <= day["p90"]
 
 
@@ -99,3 +99,14 @@ def test_partial_rain_trims_history_instead_of_dropping_rain(client, upstream):
     assert job["history"][0]["date"] == "2026-08-12" and len(job["history"]) == 59
     sent = json.loads(upstream["run"].calls.last.request.content)["input"]
     assert len(sent["history"]) == len(sent["rain_past"]) == 59
+
+
+def test_multi_day_usgs_outage_is_filled_and_disclosed(client, upstream):
+    # Real case: Missouri River at Hermann had no readings for 4 days in October 2026.
+    from .conftest import daily_json
+    data = daily_json()
+    data["features"] = data["features"][:-10] + data["features"][-6:]  # drop 4 days
+    upstream["daily"].mock(return_value=Response(200, json=data))
+    job = client.post("/api/forecasts", json=BODY).json()
+    assert len(job["history"]) == 60
+    assert "USGS was missing 4 day(s) of flow; filled by linear interpolation." in job["notices"]

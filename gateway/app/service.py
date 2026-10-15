@@ -68,7 +68,9 @@ class ForecastService:
         tr.fetch("USGS · daily discharge", daily_res)
         if site_res.stale or daily_res.stale:
             notices.append("USGS is failing; showing cached gauge data.")
-        history = regularize(rows)
+        history, filled = regularize(rows)
+        if filled:
+            notices.append(f"USGS was missing {filled} day(s) of flow; filled by linear interpolation.")
         future = future_dates(history[-1][0], horizon)
 
         # 2. Open-Meteo: rainfall at the gauge. Optional: degrade, don't fail.
