@@ -9,6 +9,12 @@ forecasts on a Runpod Serverless GPU endpoint)
 **What will this river do next week?** Pick a USGS river gauge and River Outlook
 returns a 7-day probabilistic flow forecast that accounts for the rain on its way.
 
+**Why it matters:** rivers change in days. In October 2026 one storm took the Potomac near
+Washington from 1,430 to 12,600 cfs in four days. Paddlers, farmers, water utilities and
+emergency planners need what comes next, not just the gauge's history. For developers, the
+pattern carries over to any time series: public data in, a GPU model in the middle, a
+graceful fallback around it.
+
 It combines two free public APIs in one workflow:
 
 1. **USGS Water Data API**: the gauge's location and its last 90 days of daily discharge.
