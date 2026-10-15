@@ -6,6 +6,8 @@ proxy, so the browser polls our gateway and never holds a long request open.
 """
 from __future__ import annotations
 
+import asyncio
+
 import httpx
 
 from .config import Settings
@@ -42,7 +44,15 @@ async def _call(client: httpx.AsyncClient, method: str, url: str, s: Settings, *
 async def submit(client: httpx.AsyncClient, s: Settings, payload: dict) -> str:
     # Runpod drops the job if no worker picks it up before the TTL (ms).
     body = {"input": payload, "policy": {"ttl": int(s.gpu_deadline_s * 1000)}}
-    data = await _call(client, "POST", _url(s, "run"), s, json=body)
+    try:
+        data = await _call(client, "POST", _url(s, "run"), s, json=body)
+    except UpstreamError as exc:
+        if exc.kind != "unavailable":
+            raise
+        # One retry on a transient failure. A duplicate job would only cost a
+        # few ms of GPU time, which beats dropping a user to the CPU baseline.
+        await asyncio.sleep(0.5)
+        data = await _call(client, "POST", _url(s, "run"), s, json=body)
     job_id = data.get("id")
     if not job_id:
         raise UpstreamError(SERVICE, "bad_response", "Runpod did not return a job id")

@@ -9,6 +9,7 @@ Every hop is recorded as a trace span so the UI can show the request's path.
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 
 import httpx
@@ -18,6 +19,8 @@ from .config import Settings
 from .errors import UpstreamError
 from .jobs import Job, JobStore
 from .series import MIN_POINTS, future_dates, regularize
+
+log = logging.getLogger("river_outlook")
 
 FAULTS = {"usgs_down", "usgs_rate_limit", "openmeteo_down", "gpu_down"}
 CHRONOS_QUANTILES = [0.1, 0.5, 0.9]
@@ -176,6 +179,8 @@ class ForecastService:
         job.status = "completed"
 
     def _fallback(self, job: Job, notice: str) -> None:
+        log.warning("baseline fallback job=%s site=%s runpod_job=%s: %s",
+                    job.id, job.site["id"], job.runpod_job_id, notice)
         job.forecast = baseline.forecast(job.history, job.horizon)
         job.mode = "baseline"
         job.model = {"name": baseline.NAME, "device": "CPU", "covariates": False}

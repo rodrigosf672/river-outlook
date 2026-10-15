@@ -110,3 +110,17 @@ def test_multi_day_usgs_outage_is_filled_and_disclosed(client, upstream):
     job = client.post("/api/forecasts", json=BODY).json()
     assert len(job["history"]) == 60
     assert "USGS was missing 4 day(s) of flow; filled by linear interpolation." in job["notices"]
+
+
+def test_transient_runpod_submit_error_is_retried_once(client, upstream):
+    upstream["run"].mock(side_effect=[Response(503), Response(200, json={"id": "rp-job-1", "status": "IN_QUEUE"})])
+    job = client.post("/api/forecasts", json=BODY).json()
+    assert job["status"] == "queued" and job["mode"] is None
+    assert upstream["run"].call_count == 2
+
+
+def test_fallback_reason_is_logged(client, upstream, caplog):
+    upstream["run"].mock(return_value=Response(500))
+    with caplog.at_level("WARNING", logger="river_outlook"):
+        client.post("/api/forecasts", json=BODY)
+    assert "baseline fallback" in caplog.text and "Runpod returned HTTP 500" in caplog.text

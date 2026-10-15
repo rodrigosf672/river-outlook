@@ -7,6 +7,7 @@ GET  /                         the frontend (same origin, so one URL to share)
 """
 from __future__ import annotations
 
+import logging
 import os
 import time
 from collections import defaultdict, deque
@@ -25,6 +26,8 @@ from .config import Settings, get_settings
 from .errors import InputError, UpstreamError
 from .jobs import JobStore
 from .service import FAULTS, ForecastService
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
 FRONTEND_DIR = Path(os.getenv("FRONTEND_DIR", Path(__file__).resolve().parents[2] / "frontend"))
 
