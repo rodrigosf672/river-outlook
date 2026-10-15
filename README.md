@@ -30,7 +30,7 @@ the GPU path fails, the gateway answers with a CPU statistical baseline instead.
 > percentile was 2,889 cfs. One event proves little either way, which is why a proper
 > backtest is the first item under next steps.
 
-![River Outlook: Potomac forecast, request trace, and burst run](docs/screenshot.png)
+![River Outlook on the live deployment: Potomac forecast on a Runpod GPU, request trace, and a 9-gauge burst](docs/screenshot.png)
 
 > Exploratory tool, not a flood warning system.
 
@@ -211,7 +211,7 @@ Set `ALLOW_FAULT_INJECTION=true` and use **Failure drills** in the UI (or
 ## Tests
 
 ```bash
-cd gateway && .venv/bin/pytest -q    # 16 tests, upstreams mocked with respx
+cd gateway && .venv/bin/pytest -q    # 18 tests, upstreams mocked with respx
 cd worker  && pytest -q              # 8 tests, input validation + frame shaping (no model)
 ```
 
