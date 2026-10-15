@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>River Outlook</title>
+  <meta name="description" content="7-day river forecasts from USGS gauges and Open-Meteo rainfall, run on a Runpod GPU.">
+  <link rel="stylesheet" href="style.css">
+  <script src="config.js"></script>
+</head>
+<body>
+<main>
+  <header>
+    <h1>River Outlook</h1>
+    <p class="lede">Pick a USGS river gauge. The backend pulls its last 90 days of flow from
+      <strong>USGS</strong> and rainfall (past and forecast) from <strong>Open-Meteo</strong>, then asks
+      <strong>Chronos-2</strong> on a <strong>Runpod Serverless GPU</strong> what the river does next.</p>
+  </header>
+
+  <form id="form" class="card" novalidate>
+    <div class="row">
+      <label class="grow">Gauge
+        <select id="preset"></select>
+      </label>
+      <label>or USGS site id
+        <input id="site" inputmode="numeric" autocomplete="off" placeholder="01646500" pattern="\d{8,15}">
+      </label>
+      <label>Days ahead
+        <input id="horizon" type="number" min="1" max="14" value="7">
+      </label>
+      <button id="go" type="submit">Forecast</button>
+    </div>
+    <p id="form-error" class="field-error" hidden></p>
+    <details id="drills" hidden>
+      <summary>Failure drills (demo only)</summary>
+      <p class="muted">Simulate an upstream failure on the next request. The server only honours this when
+        <code>ALLOW_FAULT_INJECTION=true</code>.</p>
+      <div class="row wrap" id="faults"></div>
+    </details>
+  </form>
+
+  <section id="progress" class="card" hidden aria-live="polite">
+    <ol class="steps">
+      <li data-step="fetch">Fetching USGS + Open-Meteo</li>
+      <li data-step="queued">Queued on Runpod: waking a GPU worker</li>
+      <li data-step="running">Running Chronos-2 on the GPU</li>
+      <li data-step="done">Done</li>
+    </ol>
+    <p class="muted"><span id="elapsed">0.0</span> s elapsed · Runpod status: <code id="rp-status">-</code></p>
+  </section>
+
+  <section id="error" class="card error" hidden role="alert">
+    <h2 id="error-title">Something went wrong</h2>
+    <p id="error-msg"></p>
+    <button id="retry" type="button">Try again</button>
+  </section>
+
+  <section id="result" hidden>
+    <div id="notices"></div>
+    <div class="card">
+      <div class="headline">
+        <div>
+          <h2 id="site-name"></h2>
+          <p class="muted" id="site-meta"></p>
+        </div>
+        <span id="model-badge" class="badge"></span>
+      </div>
+      <div class="stats" id="stats"></div>
+      <div class="legend" id="legend"></div>
+      <div class="chart" id="flow-chart"></div>
+      <div class="chart small" id="rain-chart"></div>
+      <div class="tooltip" id="tooltip" hidden></div>
+      <details>
+        <summary>Forecast as a table</summary>
+        <table id="table"></table>
+      </details>
+    </div>
+
+    <div class="card">
+      <h2>Request trace</h2>
+      <p class="muted">Every hop this forecast took, on one timeline. Run it twice to compare a cold and a warm GPU worker.</p>
+      <div id="trace"></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="headline">
+      <div>
+        <h2>Burst: forecast every gauge at once</h2>
+        <p class="muted">Sends one GPU job per gauge in parallel. Watch the endpoint scale up in the Runpod console, then back to zero.</p>
+      </div>
+      <button id="burst" type="button">Run burst</button>
+    </div>
+    <div id="burst-grid" class="burst"></div>
+  </section>
+
+  <footer class="muted">Data: USGS Water Data API (public domain), Open-Meteo (CC BY 4.0). Exploratory only, not a flood warning system.</footer>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
