@@ -1,5 +1,11 @@
 # River Outlook
 
+[![tests](https://github.com/rodrigosf672/river-outlook/actions/workflows/tests.yml/badge.svg)](https://github.com/rodrigosf672/river-outlook/actions/workflows/tests.yml)
+[![images](https://github.com/rodrigosf672/river-outlook/actions/workflows/images.yml/badge.svg)](https://github.com/rodrigosf672/river-outlook/actions/workflows/images.yml)
+
+**Live app:** https://qkgna8kyrv02jx-8000.proxy.runpod.net (gateway on a Runpod CPU pod,
+forecasts on a Runpod Serverless GPU endpoint)
+
 **What will this river do next week?** Pick a USGS river gauge and River Outlook
 returns a 7-day probabilistic flow forecast that accounts for the rain on its way.
 
@@ -17,7 +23,12 @@ the GPU path fails, the gateway answers with a CPU statistical baseline instead.
 > forecast over 7 days), adding rain made the day-7 forecast *lower and narrower*
 > (median 1,597 cfs, 90th percentile 2,889) than flow alone (2,042 and 3,955). The
 > model learns the rain-to-flow link in context from only 60 to 90 days, so its
-> effect is unverified. Backtesting is the first item under next steps.
+> effect is unverified.
+>
+> **What actually happened:** the rain fell, and the Potomac rose from 1,430 cfs (Oct 9)
+> to 12,600 cfs (Oct 13). Both forecasts missed the rise; even the rain-aware 90th
+> percentile was 2,889 cfs. One event proves little either way, which is why a proper
+> backtest is the first item under next steps.
 
 ![River Outlook: Potomac forecast, request trace, and burst run](docs/screenshot.png)
 
@@ -92,38 +103,49 @@ To test the real handler through the Runpod SDK: `cd worker && python handler.py
 
 ## Deploy on Runpod
 
-### 0. Images
+### Images
 
 Every push to `main` builds both images on x86 runners and pushes them to GHCR
-(`.github/workflows/images.yml`):
+(`.github/workflows/images.yml`), tagged `latest` and with the commit SHA:
 
-- `ghcr.io/rodrigosf672/river-outlook-worker:latest` (CUDA, PyTorch, Chronos-2 weights baked in)
-- `ghcr.io/rodrigosf672/river-outlook-gateway:latest` (gateway + frontend)
+- `ghcr.io/rodrigosf672/river-outlook-worker` (Runpod PyTorch base, Chronos-2 weights baked in)
+- `ghcr.io/rodrigosf672/river-outlook-gateway` (gateway + frontend)
 
-To build locally instead, from an Apple Silicon Mac, pass `--platform linux/amd64`.
+The packages are public, so Runpod pulls them without registry credentials.
 
-### 1. GPU worker → Serverless endpoint
+### One command
 
-In the Runpod console, open **Serverless**, choose **New Endpoint**, and use the worker image.
+```bash
+brew install runpod/runpodctl/runpodctl     # or: curl -sSL https://cli.runpod.net | bash
+runpodctl doctor                            # saves your API key to ~/.runpod/config.toml
+./deploy/deploy.sh <image-tag>              # defaults to "latest"
+```
 
-- **GPU:** any 16 GB GPU is plenty. Chronos-2 is small, and the weights are baked into the image.
-- **Workers:** set active (min) workers to 0 so it scales to zero, and max workers to about 3 for the burst demo.
-- **Copy the endpoint id.**
+[`deploy/deploy.sh`](deploy/deploy.sh) makes the same calls used for the live deployment:
 
-### 2. Gateway and frontend → CPU Pod
+1. **Secret.** It stores the key the gateway uses as the Runpod secret
+   `river_outlook_runpod_key` (`POST /v2/account/secrets`). Set `GATEWAY_RUNPOD_KEY` to
+   a **restricted key** scoped to the endpoint instead of your account key.
+2. **Serverless GPU endpoint** from [`deploy/endpoint.json`](deploy/endpoint.json)
+   (`POST /v2/serverless`). It's queue-based, can use three GPU pools (`ADA_24`, `AMPERE_24`,
+   `AMPERE_16`) for availability, needs CUDA 12.8 or newer, has 0 to 3 workers with a 60 s
+   idle timeout, uses FlashBoot, and has a 120 s execution timeout.
+3. **CPU pod** for the gateway (`runpodctl pod create --compute-type CPU`), on port
+   `8000/http`, with env from [`deploy/pod-env.json`](deploy/pod-env.json). The key is a
+   secret reference, `{{ RUNPOD_SECRET_river_outlook_runpod_key }}`, never a literal value.
+4. It waits for `https://<POD_ID>-8000.proxy.runpod.net/api/health` and prints the URL.
 
-1. Under **Secrets**, add `runpod_api_key` and, optionally, `usgs_api_key`.
-2. Under **Pods**, choose **Deploy**, pick a **CPU** pod, and use a custom template with the image above.
-3. Expose HTTP port **8000** and set these environment variables:
+**Measured on the live deployment (Oct 2026):**
 
-   ```
-   RUNPOD_API_KEY={{ RUNPOD_SECRET_runpod_api_key }}
-   RUNPOD_ENDPOINT_ID=<endpoint id from step 1>
-   USGS_API_KEY={{ RUNPOD_SECRET_usgs_api_key }}
-   ```
+- **First cold start:** 56 s of `delayTime` (worker start, image pull, model load). Execution took 346 ms, of which inference was 180 ms.
+- **A warm forecast:** 1.4 s end to end in the browser. The Runpod queue took 142 ms and inference 33 ms.
+- **Burst of 9 gauges:** 10.6 s.
+- **Cost:** the CPU pod is $0.06/hour, and the endpoint costs nothing while idle.
 
-4. Open `https://<POD_ID>-8000.proxy.runpod.net`. That is the application URL.
-5. Check `GET /api/health`. It should report `"gpu_configured": true`.
+**Teardown:** `runpodctl pod delete <pod-id>`, then `runpodctl serverless delete <endpoint-id>`.
+
+**Updating:** after a new image builds, `runpodctl pod update <pod-id> --image ghcr.io/rodrigosf672/river-outlook-gateway:<sha>`.
+For the worker, `PATCH /v2/serverless/<id>` with the new `image`.
 
 To host the frontend elsewhere (e.g. GitHub Pages), set `window.RIVER_API_BASE` in
 `frontend/config.js` to the pod URL and set `ALLOWED_ORIGINS` on the gateway.
@@ -170,10 +192,26 @@ See `.env.example`.
 Set `ALLOW_FAULT_INJECTION=true` and use **Failure drills** in the UI (or
 `?simulate=openmeteo_down,usgs_rate_limit,usgs_down,gpu_down`) to trigger each case live.
 
+## Security and cost guardrails
+
+- **Keys stay server-side.** The browser talks only to the gateway. The Runpod key
+  reaches the pod as a Runpod secret, and a test asserts that no key appears in any
+  response.
+- **Least privilege (recommended).** The live deployment uses an account key. Use a
+  restricted key that can only run this endpoint (Runpod console → Settings → API
+  Keys), and rotate any key that was ever shared.
+- **Bounded GPU spend from a public URL.** There's a per-IP rate limit (30 forecasts per
+  minute) and a 3-worker cap. Each job has a 120 s execution timeout, a queue TTL and a
+  gateway deadline that cancels it. Idle workers scale to zero after 60 s.
+- **Input validation happens before any upstream call**, in the browser and the gateway,
+  and again in the worker, which rejects malformed jobs with an error result.
+- **Failure drills are opt-in** (`ALLOW_FAULT_INJECTION`) and only affect the request that
+  asks for them. They're on for the live demo.
+
 ## Tests
 
 ```bash
-cd gateway && .venv/bin/pytest -q    # 15 tests, upstreams mocked with respx
+cd gateway && .venv/bin/pytest -q    # 16 tests, upstreams mocked with respx
 cd worker  && pytest -q              # 8 tests, input validation + frame shaping (no model)
 ```
 
@@ -187,10 +225,11 @@ runs both suites (`.github/workflows/tests.yml`).
 gateway/   FastAPI gateway: app/{main,service,usgs,openmeteo,runpod_client,baseline,series,http,jobs}.py
 worker/    Runpod Serverless handler (Chronos-2), local Runpod stand-in, tests
 frontend/  Static HTML/CSS/JS, no build step; served by the gateway
+deploy/    deploy.sh plus the endpoint and pod configs used for the live deployment
 docs/      Screenshot and demo script
 ```
 
-## Tradeoffs and next steps
+## Known limitations and next steps
 
 - **Is a GPU necessary?** Not for one gauge: Chronos-2 forecasts a single site in under
   a second on CPU. The GPU matters for scale: batch many gauges per request (the
@@ -202,7 +241,12 @@ docs/      Screenshot and demo script
 - **No accuracy evaluation yet**: next is a backtest against held-out USGS weeks, with and
   without rain, reporting error and coverage of the 80% band. That settles whether the rain
   input earns its place (see the note at the top).
-- **Cold starts**: use Runpod's cached models or FlashBoot instead of baking weights into the image, and measure the difference.
+- **Cold starts**: the first worker took 56 s (image pull and model load). Next, compare
+  Runpod's cached models (`--model-reference`) against baking the weights into the image.
+- **USGS outages**: gaps of up to 7 days are interpolated and disclosed in the UI (Missouri
+  at Hermann had a real 4-day gap). Longer gaps cut the history.
+- **Not done**: no USGS API key configured on the live pod (it's optional; the app works
+  within the keyless limit thanks to caching), and no restricted Runpod key yet (see guardrails).
 
 ## How AI was used
 

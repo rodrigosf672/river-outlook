@@ -1,6 +1,5 @@
 {
   "RUNPOD_API_KEY": "{{ RUNPOD_SECRET_river_outlook_runpod_key }}",
   "RUNPOD_ENDPOINT_ID": "xbni1o6sdjtjae",
-  "GPU_DEADLINE_S": "300",
   "ALLOW_FAULT_INJECTION": "true"
 }
